@@ -14,8 +14,10 @@ struct buffer_t {
 typedef struct buffer_t buffer_t;
 
 int init_buffer_t(buffer_t *buffer);
+int clear_buffer_t(buffer_t *buffer);
 int append_buffer_t(buffer_t *buffer, char c);
 int write_buffer_t(buffer_t *buffer, const char *data);
+int insert_buffer_t(buffer_t *buffer, const char *data, int offset);
 int resize_buffer_t(buffer_t *buffer);
 int free_buffer_t(buffer_t *buffer);
 

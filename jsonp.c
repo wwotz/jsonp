@@ -31,6 +31,15 @@ int init_buffer_t(buffer_t *buffer)
         }
         buffer->size = 0;
         buffer->capacity = BUFFER_T_CAPACITY;
+        return clear_buffer_t(buffer);
+}
+
+int clear_buffer_t(buffer_t *buffer)
+{
+        if (buffer == NULL) return -1;
+        if (buffer->data != NULL)
+                memset(buffer->data, 0,
+                       (buffer->capacity + 1) * sizeof(*buffer->data));
         return 0;
 }
 
@@ -48,7 +57,7 @@ int append_buffer_t(buffer_t *buffer, char c)
 
 int resize_buffer_t(buffer_t *buffer)
 {
-        char *new_data = realloc(buffer->data, buffer->capacity*2);
+        char *new_data = realloc(buffer->data, (buffer->capacity*2) + 1);
         if (new_data == NULL) return -1;
         buffer->data = new_data;
         buffer->capacity *= 2;
@@ -57,13 +66,18 @@ int resize_buffer_t(buffer_t *buffer)
 
 int write_buffer_t(buffer_t *buffer, const char *data)
 {
+        return insert_buffer_t(buffer, data, 0);
+}
+
+int insert_buffer_t(buffer_t *buffer, const char *data, int offset)
+{
         if (buffer == NULL || data == NULL) return -1;
-        int data_len = strlen(data);
+        int data_len = strlen(data) + offset;
         if (data_len >= buffer->capacity) {
                 if (resize_buffer_t(buffer) != 0)
                         return -1;
         }
-        strncpy(buffer->data, data, buffer->capacity);
+        strncpy(buffer->data+offset, data, buffer->capacity);
         buffer->size = data_len;
         buffer->data[data_len] = '\0';
         return 0;
@@ -73,6 +87,7 @@ int free_buffer_t(buffer_t *buffer)
 {
         if (buffer == NULL) return -1;
         if (buffer->data != NULL) {
+                clear_buffer_t(buffer);
                 free(buffer->data);
                 buffer->data = NULL;
         }
