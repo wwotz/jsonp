@@ -106,6 +106,28 @@ int free_buffer_t(buffer_t *buffer)
         return 0;
 }
 
+static int jp_stack_push(struct json_token* tok)
+{
+        if (jp_token_stack_size < jp_token_stack_capacity)
+                jp_token_stack_size++;
+        jp_token_stack[jp_token_stack_ptr].type = tok->type;
+        write_buffer_t(&jp_token_stack[jp_token_stack_ptr].token, tok->token.data);
+        jp_token_stack_ptr = (jp_token_stack_ptr + 1) % jp_token_stack_capacity;
+        return 0;
+}
+
+static struct json_token *jp_stack_pop()
+{
+        if (jp_token_stack_size == 0) return NULL;
+        jp_token_stack_ptr--;
+        jp_token_stack_size--;
+        if (jp_token_stack_ptr < 0)
+                jp_token_stack_ptr += jp_token_stack_capacity;
+        tok->type = jp_token_stack[jp_token_stack_ptr].type;
+        write_buffer_t(&tok->token, jp_token_stack[jp_token_stack_ptr].token.data);
+        return tok;
+}
+
 static struct json_token *jp_empty_token()
 {
         if (tok == NULL) {
@@ -257,14 +279,27 @@ static struct json_token *jp_error_token(const char *msg)
 
 int jp_set_fd(FILE *fd)
 {
+        for (int i = 0; i < jp_token_stack_capacity; i++) {
+                init_buffer_t(&jp_token_stack[i].token);
+                jp_token_stack[i].type = JSON_EMPTY;
+        }
+
         curr_fd = fd;
         if (curr_fd == NULL) return -1;
         lookahead = fgetc(curr_fd);
         return 0;
 }
 
+struct json_token *jp_peek_token()
+{
+        jp_stack_push(jp_get_token());
+        return tok;
+}
+
 struct json_token *jp_get_token()
 {
+        if (jp_token_stack_size > 0)
+                return jp_stack_pop();
         if (curr_fd == NULL) return jp_empty_token();
 
         // skip whitespace.
@@ -294,9 +329,10 @@ struct json_token *jp_get_token()
         return jp_undefined_token();
 }
 
-struct json_token *jp_unget_token()
+struct json_token *jp_unget_token(struct json_token *tok)
 {
-        if (curr_fd == NULL) return jp_empty_token();
+        jp_stack_push(tok);
+        return tok;
 }
 
 /* rewinds fd back to the beginning of the file, equivalent of a

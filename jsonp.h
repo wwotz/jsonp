@@ -44,8 +44,9 @@ int insert_buffer_t(buffer_t *buffer, const char *data, int offset);
 int resize_buffer_t(buffer_t *buffer);
 int free_buffer_t(buffer_t *buffer);
 
+struct json_token *jp_peek_token();
 struct json_token *jp_get_token();
-struct json_token *jp_unget_token();
+struct json_token *jp_unget_token(struct json_token *tok);
 int jp_rewind();
 int jp_set_fd(FILE *fd);
 
