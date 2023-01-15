@@ -1,25 +1,33 @@
 /* jsonp.c - json parser written in C */
 #include "jsonp.h"
 
-enum JSON_TYPE {
-        JSON_EOF = 0,
-        JSON_OPEN_BRACE,
-        JSON_CLOSE_BRACE,
-        JSON_OPEN_BRACKET,
-        JSON_CLOSE_BRACKET,
-        JSON_COMMA,
-        JSON_COLON,
-        JSON_NUMBER,
-        JSON_STRING,
-        JSON_UNDEFINED,
-        JSON_ERROR,
-        JSON_TYPE_COUNT,
-};
+/* pointer to the current token inside the file */
+static struct json_token *tok = NULL;
+static int lookahead;
+static FILE *curr_fd;
 
-struct json_token {
-        buffer_t token;
-        int type;
-};
+/* used in order to un-get tokens */
+static int jp_token_stack_capacity = 10;
+static int jp_token_stack_size = 0;
+static int jp_token_stack_ptr = 0;
+static struct json_token jp_token_stack[10];
+
+static int jp_stack_push(struct json_token* tok);
+static struct json_token *jp_stack_pop();
+
+/* functions to return token primitives */
+static struct json_token *jp_empty_token();
+static struct json_token *jp_eof_token();
+static struct json_token *jp_open_brace_token();
+static struct json_token *jp_close_brace_token();
+static struct json_token *jp_open_bracket_token();
+static struct json_token *jp_close_bracket_token();
+static struct json_token *jp_string_token();
+static struct json_token *jp_number_token();
+static struct json_token *jp_colon_token();
+static struct json_token *jp_comma_token();
+static struct json_token *jp_undefined_token();
+static struct json_token *jp_error_token(const char *msg);
 
 int init_buffer_t(buffer_t *buffer)
 {
@@ -40,6 +48,7 @@ int clear_buffer_t(buffer_t *buffer)
         if (buffer->data != NULL)
                 memset(buffer->data, 0,
                        (buffer->capacity + 1) * sizeof(*buffer->data));
+        buffer->size = 0;
         return 0;
 }
 
@@ -94,5 +103,207 @@ int free_buffer_t(buffer_t *buffer)
 
         buffer->size = 0;
         buffer->capacity = 0;
+        return 0;
+}
+
+static struct json_token *jp_empty_token()
+{
+        if (tok == NULL) {
+                tok = malloc(sizeof(*tok));
+                if (tok == NULL)
+                        return NULL;
+
+                if (init_buffer_t(&tok->token) != 0) {
+                        free(tok);
+                        return NULL;
+                }
+        }
+
+        tok->type = JSON_EMPTY;
+        clear_buffer_t(&tok->token);
+        return tok;
+}
+
+static struct json_token *jp_eof_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_EOF;
+        write_buffer_t(&tok->token, "EOF");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_open_brace_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_OPEN_BRACE;
+        write_buffer_t(&tok->token, "{");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_close_brace_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_CLOSE_BRACE;
+        write_buffer_t(&tok->token, "}");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_open_bracket_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_OPEN_BRACKET;
+        write_buffer_t(&tok->token, "[");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_close_bracket_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_CLOSE_BRACKET;
+        write_buffer_t(&tok->token, "]");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_string_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_STRING;
+        lookahead = fgetc(curr_fd);
+        while (lookahead != '"' && lookahead != EOF) {
+                append_buffer_t(&tok->token, lookahead);
+                lookahead = fgetc(curr_fd);
+        }
+
+        if (lookahead == EOF) {
+                tok = jp_error_token("Unterminated string");
+        } else {
+                lookahead = fgetc(curr_fd);
+        }
+        return tok;
+}
+
+static struct json_token *jp_number_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_NUMBER;
+        while ((lookahead >= '0' && lookahead <= '9') && lookahead != EOF) {
+                append_buffer_t(&tok->token, lookahead);
+                lookahead = fgetc(curr_fd);
+        }
+
+        if (lookahead == EOF) {
+                tok = jp_error_token("Unterminated number");
+                return tok;
+        }
+
+        if (lookahead == '.') {
+                append_buffer_t(&tok->token, lookahead);
+                lookahead = fgetc(curr_fd);
+                while ((lookahead >= '0' && lookahead <= '9') && lookahead != EOF) {
+                        append_buffer_t(&tok->token, lookahead);
+                        lookahead = fgetc(curr_fd);
+                }
+
+                if (lookahead == EOF) {
+                        tok = jp_error_token("Unterminated number");
+                        return tok;
+                }
+        }
+        return tok;
+}
+
+static struct json_token *jp_colon_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_COLON;
+        write_buffer_t(&tok->token, ":");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_comma_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_COMMA;
+        write_buffer_t(&tok->token, ",");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_undefined_token()
+{
+        tok = jp_empty_token();
+        tok->type = JSON_UNDEFINED;
+        write_buffer_t(&tok->token, "UNDEFINED");
+        lookahead = fgetc(curr_fd);
+        return tok;
+}
+
+static struct json_token *jp_error_token(const char *msg)
+{
+        tok = jp_empty_token();
+        tok->type = JSON_EOF;
+        if (msg != NULL)
+                write_buffer_t(&tok->token, msg);
+        else
+                write_buffer_t(&tok->token, "ERROR");
+        return tok;
+}
+
+int jp_set_fd(FILE *fd)
+{
+        curr_fd = fd;
+        if (curr_fd == NULL) return -1;
+        lookahead = fgetc(curr_fd);
+        return 0;
+}
+
+struct json_token *jp_get_token()
+{
+        if (curr_fd == NULL) return jp_empty_token();
+
+        // skip whitespace.
+        while (lookahead == ' ' || lookahead == '\t' || lookahead == '\n' || lookahead == '\r')
+                lookahead = fgetc(curr_fd);
+
+        if (lookahead == EOF) {
+                return jp_eof_token();
+        } else if (lookahead == '{') {
+                return jp_open_brace_token();
+        } else if (lookahead == '}') {
+                return jp_close_brace_token();
+        } else if (lookahead == '[') {
+                return jp_open_bracket_token();
+        } else if (lookahead == ']') {
+                return jp_close_bracket_token();
+        } else if (lookahead == ',') {
+                return jp_comma_token();
+        } else if (lookahead == ':') {
+                return jp_colon_token();
+        } else if (lookahead == '"') {
+                return jp_string_token();
+        } else if (lookahead >= '0' && lookahead <= '9') {
+                return jp_number_token();
+        }
+
+        return jp_undefined_token();
+}
+
+struct json_token *jp_unget_token()
+{
+        if (curr_fd == NULL) return jp_empty_token();
+}
+
+/* rewinds fd back to the beginning of the file, equivalent of a
+  call to rewind(fd) or fseek(fd, 0L, SEEK_SET) */
+int jp_rewind()
+{
+        if (curr_fd == NULL) return -1;
+        rewind(curr_fd);
         return 0;
 }
