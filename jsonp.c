@@ -6,11 +6,13 @@ static struct json_token *tok = NULL;
 static int lookahead;
 static FILE *curr_fd;
 
+#define JP_TOKEN_STACK_CAPACITY (10)
+
 /* used in order to un-get tokens */
-static int jp_token_stack_capacity = 10;
+static int jp_token_stack_capacity = JP_TOKEN_STACK_CAPACITY;
 static int jp_token_stack_size = 0;
 static int jp_token_stack_ptr = 0;
-static struct json_token jp_token_stack[10];
+static struct json_token jp_token_stack[JP_TOKEN_STACK_CAPACITY];
 
 static int jp_stack_push(struct json_token* tok);
 static struct json_token *jp_stack_pop();
@@ -29,72 +31,152 @@ static struct json_token *jp_comma_token();
 static struct json_token *jp_undefined_token();
 static struct json_token *jp_error_token(const char *msg);
 
+#define JP_DEBUG_STACK_CAPACITY (20)
+
+/* debug stack to debug code */
+static int jp_debug_stack_capacity = JP_DEBUG_STACK_CAPACITY;
+static int jp_debug_stack_size = 0;
+static int jp_debug_stack_ptr = 0;
+static const char *jp_debug_stack[JP_DEBUG_STACK_CAPACITY];
+static int jp_push_error_debug(const char *msg);
+static const char *jp_pop_error_debug(void);
+
+typedef enum BUFFER_ERRORS {
+        NO_BUFFER_ERROR = 0, NULL_BUFFER_ERROR,
+        DATA_BUFFER_ERROR, RESIZE_BUFFER_ERROR,
+        ENUM_BUFFER_COUNT
+} BUFFER_ERRORS;
+
+/* operations on the buffer_t structure */
+int init_buffer_t(buffer_t *buffer);
+int clear_buffer_t(buffer_t *buffer);
+int append_buffer_t(buffer_t *buffer, char c);
+int resize_buffer_t(buffer_t *buffer);
+int write_buffer_t(buffer_t *buffer, const char *data);
+int insert_buffer_t(buffer_t *buffer, const char *data, int offset);
+int free_buffer_t(buffer_t *buffer);
+static const char *get_error_buffer_t(int status);
+
+/* initialise a buffer type, returns -1 on error,
+   otherwise 0 on success. */
 int init_buffer_t(buffer_t *buffer)
 {
-        if (buffer == NULL) return -1;
+        if (buffer == NULL) {
+                jp_push_error_debug(get_error_buffer_t(NULL_BUFFER_ERROR));
+                return NULL_BUFFER_ERROR;
+        }
+
         buffer->data = malloc(sizeof(*buffer->data) * (BUFFER_T_CAPACITY + 1));
         if (buffer->data == NULL) {
                 free_buffer_t(buffer);
-                return -1;
+                jp_push_error_debug(get_error_buffer_t(DATA_BUFFER_ERROR));
+                return DATA_BUFFER_ERROR;
         }
+
         buffer->size = 0;
         buffer->capacity = BUFFER_T_CAPACITY;
         return clear_buffer_t(buffer);
 }
 
+/* clear the contents of the data inside the buffer,
+   returns -1 on error, 0 on success. */
 int clear_buffer_t(buffer_t *buffer)
 {
-        if (buffer == NULL) return -1;
-        if (buffer->data != NULL)
-                memset(buffer->data, 0,
-                       (buffer->capacity + 1) * sizeof(*buffer->data));
+        if (buffer == NULL) {
+                jp_push_error_debug(get_error_buffer_t(NULL_BUFFER_ERROR));
+                return NULL_BUFFER_ERROR;
+        }
+
+        if (buffer->data == NULL) {
+                jp_push_error_debug(get_error_buffer_t(DATA_BUFFER_ERROR));
+                return DATA_BUFFER_ERROR;
+        }
+
+        memset(buffer->data, 0,
+               (buffer->capacity + 1) * sizeof(*buffer->data));
         buffer->size = 0;
-        return 0;
+        return NO_BUFFER_ERROR;
 }
 
+/* appends character @c to the end of the @buffer,
+   returns -1 on error, otherwise 0 on success */
 int append_buffer_t(buffer_t *buffer, char c)
 {
-        if (buffer == NULL) return -1;
-        if (buffer->size >= buffer->capacity) {
-                if (resize_buffer_t(buffer) != 0)
-                        return -1;
+        if (buffer == NULL) {
+                jp_push_error_debug(get_error_buffer_t(NULL_BUFFER_ERROR));
+                return NULL_BUFFER_ERROR;
         }
+
+        if (buffer->size >= buffer->capacity) {
+                if (resize_buffer_t(buffer) != 0) {
+                        jp_push_error_debug(get_error_buffer_t(RESIZE_BUFFER_ERROR));
+                        return RESIZE_BUFFER_ERROR;
+                }
+        }
+
         buffer->data[buffer->size++] = c;
         buffer->data[buffer->size] = '\0';
-        return 0;
+        return NO_BUFFER_ERROR;
 }
 
+/* resizes the size of the buffer, to 2x the size,
+   returns -1 on error, otherwise 0 on success */
 int resize_buffer_t(buffer_t *buffer)
 {
         char *new_data = realloc(buffer->data, (buffer->capacity*2) + 1);
-        if (new_data == NULL) return -1;
+        if (new_data == NULL) {
+                jp_push_error_debug(get_error_buffer_t(RESIZE_BUFFER_ERROR));
+                return RESIZE_BUFFER_ERROR;
+        }
+
         buffer->data = new_data;
         buffer->capacity *= 2;
-        return 0;
+        return NO_BUFFER_ERROR;
 }
 
+/* writes the contents of data to the start of the buffer,
+   equivalent to the call of: insert_buffer_t(buffer, data, 0),
+   returns -1 on error, otherwise 0 on success */
 int write_buffer_t(buffer_t *buffer, const char *data)
 {
         return insert_buffer_t(buffer, data, 0);
 }
 
+/* inserts the contents of @data into the buffer, which is
+   offset by @offset. Returns -1 on error, otherwise 0 on success */
 int insert_buffer_t(buffer_t *buffer, const char *data, int offset)
 {
-        if (buffer == NULL || data == NULL) return -1;
-        int data_len = strlen(data) + offset;
-        if (data_len >= buffer->capacity) {
-                if (resize_buffer_t(buffer) != 0)
-                        return -1;
+        if (buffer == NULL) {
+                jp_push_error_debug(get_error_buffer_t(NULL_BUFFER_ERROR));
+                return NULL_BUFFER_ERROR;
         }
-        strncpy(buffer->data+offset, data, buffer->capacity);
-        buffer->size = data_len;
-        buffer->data[data_len] = '\0';
-        return 0;
+
+        if (data != NULL) {
+                int data_len = strlen(data) + offset;
+                if (data_len >= buffer->capacity) {
+                        int status;
+                        if ((status = resize_buffer_t(buffer)) != NO_BUFFER_ERROR)
+                                return status;
+                }
+
+                strncpy(buffer->data+offset, data, buffer->capacity);
+                buffer->size = data_len;
+                buffer->data[data_len] = '\0';
+        }
+
+        return NO_BUFFER_ERROR;
 }
 
+/* frees the contents of the buffer, if @buffer is
+   a malloc'd memory area, it must be free'd by the
+   caller. returns -1 on error, otherwise 0 on success */
 int free_buffer_t(buffer_t *buffer)
 {
-        if (buffer == NULL) return -1;
+        if (buffer == NULL) {
+                jp_push_error_debug(get_error_buffer_t(NULL_BUFFER_ERROR));
+                return NULL_BUFFER_ERROR;
+        }
+
         if (buffer->data != NULL) {
                 clear_buffer_t(buffer);
                 free(buffer->data);
@@ -103,15 +185,33 @@ int free_buffer_t(buffer_t *buffer)
 
         buffer->size = 0;
         buffer->capacity = 0;
-        return 0;
+        return NO_BUFFER_ERROR;
 }
 
+/* returns a message describing the error code
+   defined by @status */
+static const char *get_error_buffer_t(int status)
+{
+        static const char *msgs[ENUM_BUFFER_COUNT] = {
+                "No Error",
+                "buffer was null!",
+                "data was null!",
+                "failed to resize buffer!",
+        };
+
+        return (status >= 0 && status < ENUM_BUFFER_COUNT
+                ? msgs[status] : "Unknown Error");
+}
+
+/* push a json_token on top of the json parser stack,
+   */
 static int jp_stack_push(struct json_token* tok)
 {
         if (jp_token_stack_size < jp_token_stack_capacity)
                 jp_token_stack_size++;
         jp_token_stack[jp_token_stack_ptr].type = tok->type;
-        write_buffer_t(&jp_token_stack[jp_token_stack_ptr].token, tok->token.data);
+        if (write_buffer_t(&jp_token_stack[jp_token_stack_ptr].token, tok->token.data) != 0)
+                return -1;
         jp_token_stack_ptr = (jp_token_stack_ptr + 1) % jp_token_stack_capacity;
         return 0;
 }
