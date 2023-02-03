@@ -49,7 +49,7 @@ typedef enum BUFFER_ERRORS {
 
 static const char *get_error_buffer_t(int status);
 
-/* initialise a buffer type, returns -1 on error,
+/* initialise a buffer type, returns non-zero on error,
    otherwise 0 on success. */
 int init_buffer_t(buffer_t *buffer)
 {
@@ -73,7 +73,7 @@ int init_buffer_t(buffer_t *buffer)
 }
 
 /* clear the contents of the data inside the buffer,
-   returns -1 on error, 0 on success. */
+   returns non-zero on error, 0 on success. */
 int clear_buffer_t(buffer_t *buffer)
 {
         if (buffer == NULL) {
@@ -93,7 +93,7 @@ int clear_buffer_t(buffer_t *buffer)
 }
 
 /* appends character @c to the end of the @buffer,
-   returns -1 on error, otherwise 0 on success */
+   returns non-zero on error, otherwise 0 on success */
 int append_buffer_t(buffer_t *buffer, char c)
 {
         if (buffer == NULL) {
@@ -114,7 +114,7 @@ int append_buffer_t(buffer_t *buffer, char c)
 }
 
 /* resizes the size of the buffer, to 2x the size,
-   returns -1 on error, otherwise 0 on success */
+   returns non-zero on error, otherwise 0 on success */
 int resize_buffer_t(buffer_t *buffer)
 {
         char *new_data = realloc(buffer->data, (buffer->capacity*2) + 1);
@@ -130,14 +130,14 @@ int resize_buffer_t(buffer_t *buffer)
 
 /* writes the contents of data to the start of the buffer,
    equivalent to the call of: insert_buffer_t(buffer, data, 0),
-   returns -1 on error, otherwise 0 on success */
+   returns non-zero on error, otherwise 0 on success */
 int write_buffer_t(buffer_t *buffer, const char *data)
 {
         return insert_buffer_t(buffer, data, 0);
 }
 
 /* inserts the contents of @data into the buffer, which is
-   offset by @offset. Returns -1 on error, otherwise 0 on success */
+   offset by @offset. Returns non-zero on error, otherwise 0 on success */
 int insert_buffer_t(buffer_t *buffer, const char *data, int offset)
 {
         if (buffer == NULL) {
@@ -163,7 +163,7 @@ int insert_buffer_t(buffer_t *buffer, const char *data, int offset)
 
 /* frees the contents of the buffer, if @buffer is
    a malloc'd memory area, it must be free'd by the
-   caller. returns -1 on error, otherwise 0 on success */
+   caller. returns non-zero on error, otherwise 0 on success */
 int free_buffer_t(buffer_t *buffer)
 {
         if (buffer == NULL) {
@@ -220,8 +220,11 @@ static int jp_stack_push(struct json_token* tok)
         if (jp_token_stack_size < jp_token_stack_capacity)
                 jp_token_stack_size++;
         jp_token_stack[jp_token_stack_ptr].type = tok->type;
-        if (write_buffer_t(&jp_token_stack[jp_token_stack_ptr].token, tok->token.data) != 0)
-                return -1;
+
+        int status;
+        if ((status = write_buffer_t(&jp_token_stack[jp_token_stack_ptr].token, tok->token.data)) != 0)
+                return status;
+
         jp_token_stack_ptr = (jp_token_stack_ptr + 1) % jp_token_stack_capacity;
         return 0;
 }
