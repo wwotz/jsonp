@@ -7,18 +7,16 @@
 
 #define BUFFER_T_CAPACITY (256)
 
-struct buffer_t {
+typedef struct buffer_t {
         char *data;
         int size;
         int capacity;
-};
-typedef struct buffer_t buffer_t;
+} buffer_t;
 
-struct json_token {
+typedef struct json_token {
         buffer_t token;
         int type;
-};
-typedef struct json_token json_token;
+} json_token;
 
 enum JSON_TYPE {
         JSON_EOF = 0,
@@ -44,10 +42,13 @@ int insert_buffer_t(buffer_t *buffer, const char *data, int offset);
 int resize_buffer_t(buffer_t *buffer);
 int free_buffer_t(buffer_t *buffer);
 
-struct json_token *jp_peek_token();
-struct json_token *jp_get_token();
-struct json_token *jp_unget_token(struct json_token *tok);
-int jp_rewind();
-int jp_set_fd(FILE *fd);
+json_token *jp_peek_token();
+json_token *jp_get_token();
+json_token *jp_unget_token(struct json_token *tok);
+int jp_rewind(void);
+int jp_set_fd(const char *file);
+void jp_close_fd();
+int jp_had_error(void);
+const char *jp_get_error(void);
 
 #endif // JSONP_H_
