@@ -4,7 +4,7 @@
 
 static int prettify(const char *file_path, const char *output_file)
 {
-        if (jp_set_fd(file_path) != 0) {
+        if (jp_open_file(file_path) != 0) {
                 fprintf(stderr, "Invalid file name!\n");
                 return -1;
         }

@@ -46,7 +46,7 @@ json_token *jp_peek_token();
 json_token *jp_get_token();
 json_token *jp_unget_token(json_token *tok);
 int jp_rewind(void);
-int jp_set_fd(const char *file);
+int jp_open_file(const char *file);
 void jp_close_fd();
 int jp_had_error(void);
 const char *jp_get_error(void);

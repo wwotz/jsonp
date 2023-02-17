@@ -210,6 +210,7 @@ static int jp_push_error_debug(const char *msg)
                 if (jp_debug_stack[jp_debug_stack_ptr] != NULL) {
                         free(jp_debug_stack[jp_debug_stack_ptr]);
                 }
+                // not finished clearly
         }
 }
 
@@ -430,7 +431,7 @@ static struct json_token *jp_error_token(const char *msg)
 /* initialises the json parser token stack, as well as opens
    a json file ready for reading, returns non-zero on error,
    otherwise 0 on success */
-int jp_set_fd(const char *file)
+int jp_open_file(const char *file)
 {
         for (int i = 0; i < jp_token_stack_capacity; i++) {
                 init_buffer_t(&jp_token_stack[i].token);
@@ -444,7 +445,7 @@ int jp_set_fd(const char *file)
 }
 
 /* closes the currently open json file */
-void jp_close_fd()
+void jp_close_file()
 {
         if (curr_fd != NULL)
                 fclose(curr_fd);
