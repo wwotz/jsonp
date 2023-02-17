@@ -37,7 +37,10 @@ static struct json_token *jp_error_token(const char *msg);
 static int jp_debug_stack_capacity = JP_DEBUG_STACK_CAPACITY;
 static int jp_debug_stack_size = 0;
 static int jp_debug_stack_ptr = 0;
-static const char *jp_debug_stack[JP_DEBUG_STACK_CAPACITY];
+static char * jp_debug_stack[JP_DEBUG_STACK_CAPACITY];
+
+static int jp_stack_empty_debug();
+static int jp_stack_full_debug();
 static int jp_push_error_debug(const char *msg);
 static const char *jp_pop_error_debug(void);
 
@@ -182,12 +185,32 @@ int free_buffer_t(buffer_t *buffer)
         return NO_BUFFER_ERROR;
 }
 
+// checks if the debug stack is empty
+static int jp_stack_empty_debug()
+{
+        return jp_debug_stack_size == 0;
+}
+
+// checks if the debug stack is full
+static int jp_stack_full_debug()
+{
+        return jp_debug_stack_size == jp_debug_stack_capacity;
+}
+
 /* pushes @msg on top of the error stack,
    returns non-zero on error, otherwise 0 on
    success */
 static int jp_push_error_debug(const char *msg)
 {
-
+        if (msg != NULL) {
+                // ensures that memory is not leaked,
+                // frees allocated memory for previous error message
+                if (!jp_stack_full_debug())
+                        jp_debug_stack_size++;
+                if (jp_debug_stack[jp_debug_stack_ptr] != NULL) {
+                        free(jp_debug_stack[jp_debug_stack_ptr]);
+                }
+        }
 }
 
 /* pops the top error message off the stack and

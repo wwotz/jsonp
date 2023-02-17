@@ -1,5 +1,7 @@
 #+title: Examples
 
+** Writing a JSON prettifier
+
 #+BEGIN_SRC c
 static int prettify(const char *file_path)
 {

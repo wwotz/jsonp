@@ -44,7 +44,7 @@ int free_buffer_t(buffer_t *buffer);
 
 json_token *jp_peek_token();
 json_token *jp_get_token();
-json_token *jp_unget_token(struct json_token *tok);
+json_token *jp_unget_token(json_token *tok);
 int jp_rewind(void);
 int jp_set_fd(const char *file);
 void jp_close_fd();
