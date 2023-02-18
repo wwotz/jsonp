@@ -1,6 +1,8 @@
 # jsonp - json parser written in C. 
 
-## EXAMPLES
+* EXAMPLES
+
+** Writing a JSON prettifier:
 
 #+BEGIN_SRC C 
 #define JSONP_IMPLEMENTATION
