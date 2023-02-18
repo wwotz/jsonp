@@ -27,20 +27,27 @@ typedef struct {
 
 /* json token types */
 typedef enum {
-        JSONP_EOF = 0,
-        JSONP_EMPTY,
-        JSONP_OPEN_BRACE,
-        JSONP_CLOSE_BRACE,
-        JSONP_OPEN_BRACKET,
-        JSONP_CLOSE_BRACKET,
-        JSONP_COMMA,
-        JSONP_COLON,
-        JSONP_NUMBER,
-        JSONP_STRING,
-        JSONP_UNDEFINED,
-        JSONP_ERROR,
+        JSONP_TYPE_EOF = 0,
+        JSONP_TYPE_EMPTY,
+        JSONP_TYPE_OPEN_BRACE,
+        JSONP_TYPE_CLOSE_BRACE,
+        JSONP_TYPE_OPEN_BRACKET,
+        JSONP_TYPE_CLOSE_BRACKET,
+        JSONP_TYPE_COMMA,
+        JSONP_TYPE_COLON,
+        JSONP_TYPE_NUMBER,
+        JSONP_TYPE_STRING,
+        JSONP_TYPE_UNDEFINED,
+        JSONP_TYPE_ERROR,
         JSONP_TYPE_COUNT,
 } JSONP_TYPE;
+
+typedef enum {
+        JSONP_NO_ERROR = 0,
+        JSONP_FILE_ERROR,
+        JSONP_BUFFER_ERROR,
+        JSONP_ERROR_COUNT,
+} JSONP_ERROR;
 
 /* structure storing token information */
 typedef struct {
@@ -77,6 +84,8 @@ typedef enum {
 
 JSONP_EXTERN jsonp_info_t jsonp_create_json_info(JSONP_INFO_DATA_TYPE type,
                                                  const char *data);
+JSONP_EXTERN int jsonp_init(jsonp_info_t info);
+JSONP_EXTERN int jsonp_free(void);
 
 JSONP_EXTERN int jsonp_init_buffer(buffer_t *buffer);
 JSONP_EXTERN int jsonp_clear_buffer(buffer_t *buffer);
@@ -90,8 +99,6 @@ JSONP_EXTERN jsonp_token jsonp_peek_token();
 JSONP_EXTERN jsonp_token jsonp_get_token();
 JSONP_EXTERN jsonp_token jsonp_unget_token(jsonp_token *tok);
 JSONP_EXTERN int jsonp_rewind(void);
-JSONP_EXTERN int jsonp_set_fd(const char *file);
-JSONP_EXTERN void jsonp_close_fd();
 JSONP_EXTERN int jsonp_had_error(void);
 JSONP_EXTERN const char *jsonp_get_error(void);
 
@@ -125,18 +132,18 @@ JSONP_STATIC int jsonp_stack_full_debug(void);
 JSONP_STATIC int jsonp_stack_empty_debug(void);
 
 /* functions to return token primitives */
-JSONP_STATIC jsonp_token *jsonp_empty_token();
-JSONP_STATIC jsonp_token *jsonp_eof_token();
-JSONP_STATIC jsonp_token *jsonp_open_brace_token();
-JSONP_STATIC jsonp_token *jsonp_close_brace_token();
-JSONP_STATIC jsonp_token *jsonp_open_bracket_token();
-JSONP_STATIC jsonp_token *jsonp_close_bracket_token();
-JSONP_STATIC jsonp_token *jsonp_string_token();
-JSONP_STATIC jsonp_token *jsonp_number_token();
-JSONP_STATIC jsonp_token *jsonp_colon_token();
-JSONP_STATIC jsonp_token *jsonp_comma_token();
-JSONP_STATIC jsonp_token *jsonp_undefined_token();
-JSONP_STATIC jsonp_token *jsonp_error_token(const char *msg);
+JSONP_STATIC jsonp_token jsonp_empty_token();
+JSONP_STATIC jsonp_token jsonp_eof_token();
+JSONP_STATIC jsonp_token jsonp_open_brace_token();
+JSONP_STATIC jsonp_token jsonp_close_brace_token();
+JSONP_STATIC jsonp_token jsonp_open_bracket_token();
+JSONP_STATIC jsonp_token jsonp_close_bracket_token();
+JSONP_STATIC jsonp_token jsonp_string_token();
+JSONP_STATIC jsonp_token jsonp_number_token();
+JSONP_STATIC jsonp_token jsonp_colon_token();
+JSONP_STATIC jsonp_token jsonp_comma_token();
+JSONP_STATIC jsonp_token jsonp_undefined_token();
+JSONP_STATIC jsonp_token jsonp_error_token(const char *msg);
 
 JSONP_STATIC int jsonp_push_error_debug(const char *msg)
 {
@@ -184,73 +191,172 @@ JSONP_STATIC int jsonp_stack_empty_debug(void)
 
 #endif /* JSONP_DEBUG */
 
-JSONP_STATIC jsonp_token *jsonp_empty_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_eof_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_open_brace_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_close_brace_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_open_bracket_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_close_bracket_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_string_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_number_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_colon_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_comma_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_undefined_token()
-{
-
-}
-
-JSONP_STATIC jsonp_token *jsonp_error_token(const char *msg)
-{
-
-}
-
 /* @tok stores the current token
    @lookahead stores the current character in the file or buffer
    @curr_fd stores the file being read
 */
-JSONP_STATIC jsonp_token *tok = NULL;
+JSONP_STATIC jsonp_token tok;
 JSONP_STATIC int lookahead;
 JSONP_STATIC FILE *curr_fd;
+JSONP_STATIC buffer_t curr_buffer;
+JSONP_STATIC int curr_buffer_ptr;
+JSONP_STATIC int (* next_char)(void);
+
+JSONP_STATIC int next_char_file(void)
+{
+        return fgetc(curr_fd);
+}
+
+JSONP_STATIC int next_char_buffer(void)
+{
+        if (curr_buffer_ptr < curr_buffer.size)
+                return curr_buffer.data[curr_buffer_ptr++];
+        return EOF;
+}
+
+JSONP_STATIC jsonp_token jsonp_empty_token()
+{
+        memset(&tok, 0, sizeof(tok));
+        if (jsonp_init_buffer(&tok.token) != JSONP_NO_BUFFER_ERROR)
+                return tok;
+
+        tok.type = JSONP_TYPE_EMPTY;
+        jsonp_clear_buffer(&tok.token);
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_eof_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_EOF;
+        jsonp_write_buffer(&tok.token, "EOF");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_open_brace_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_OPEN_BRACE;
+        jsonp_write_buffer(&tok.token, "{");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_close_brace_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_CLOSE_BRACE;
+        jsonp_write_buffer(&tok.token, "}");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_open_bracket_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_OPEN_BRACKET;
+        jsonp_write_buffer(&tok.token, "[");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_close_bracket_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_CLOSE_BRACKET;
+        jsonp_write_buffer(&tok.token, "]");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_string_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_STRING;
+        lookahead = next_char();
+        while (lookahead != '"' && lookahead != EOF) {
+                jsonp_append_buffer(&tok.token, lookahead);
+                lookahead = next_char();
+        }
+
+        if (lookahead == EOF) {
+                tok = jsonp_error_token("Unterminated string");
+        } else {
+                lookahead = next_char();
+        }
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_number_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_NUMBER;
+        while ((lookahead >= '0' && lookahead <= '9')) {
+                jsonp_append_buffer(&tok.token, lookahead);
+                lookahead = next_char();
+        }
+
+        if (lookahead == '.') {
+                jsonp_append_buffer(&tok.token, lookahead);
+                lookahead = next_char();
+                while ((lookahead >= '0' && lookahead <= '9')) {
+                        jsonp_append_buffer(&tok.token, lookahead);
+                        lookahead = next_char();
+                }
+        }
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_colon_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_COLON;
+        jsonp_write_buffer(&tok.token, ":");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_comma_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_COMMA;
+        jsonp_write_buffer(&tok.token, ",");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_undefined_token()
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_UNDEFINED;
+        jsonp_write_buffer(&tok.token, "UNDEFINED");
+        lookahead = next_char();
+        return tok;
+}
+
+JSONP_STATIC jsonp_token jsonp_error_token(const char *msg)
+{
+        tok = jsonp_empty_token();
+        tok.type = JSONP_TYPE_ERROR;
+        if (msg != NULL)
+                jsonp_write_buffer(&tok.token, msg);
+        else
+                jsonp_write_buffer(&tok.token, "Error: no description");
+        return tok;
+}
+
+JSONP_STATIC const char *jsonp_get_error_init(int status)
+{
+        static const char *msgs[JSONP_ERROR_COUNT] = {
+                "No Error",
+                "File does not exist!",
+                "Could not create buffer!",
+        };
+
+        return (status >= 0 && status < JSONP_ERROR_COUNT
+            ? msgs[status] : "Undefined Error!");
+}
 
 JSONP_EXTERN jsonp_info_t jsonp_create_json_info(JSONP_INFO_DATA_TYPE type,
                                               const char *data)
@@ -264,6 +370,41 @@ JSONP_EXTERN jsonp_info_t jsonp_create_json_info(JSONP_INFO_DATA_TYPE type,
                 .type = type,
                 .data = data
         };
+}
+
+JSONP_EXTERN int jsonp_init(jsonp_info_t info)
+{
+        tok = jsonp_empty_token();
+        lookahead = EOF;
+        curr_buffer_ptr = 0;
+
+        switch (info.type) {
+        case JSONP_FILE:
+                next_char = next_char_file;
+                curr_fd = fopen(info.data, "r");
+                if (!curr_fd) {
+                        jsonp_push_error_debug(jsonp_get_error_init(JSONP_FILE_ERROR));
+                        return JSONP_FILE_ERROR;
+                }
+                break;
+        case JSONP_TEXT:
+        default: /* JSONP_TEXT is also the default case */
+                next_char = next_char_buffer;
+                jsonp_init_buffer(&curr_buffer);
+                jsonp_write_buffer(&curr_buffer, info.data);
+                if (jsonp_had_error()) {
+                        jsonp_push_error_debug(jsonp_get_error_init(JSONP_BUFFER_ERROR));
+                        return JSONP_BUFFER_ERROR;
+                }
+                break;
+        }
+
+        return JSONP_NO_ERROR;
+}
+
+JSONP_EXTERN int jsonp_free(void)
+{
+
 }
 
 JSONP_STATIC const char *jsonp_get_error_buffer(int status)
