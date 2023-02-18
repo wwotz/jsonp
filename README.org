@@ -64,3 +64,30 @@ int main(int argc, char **argv)
         return 0;
 }
 #+END_SRC
+
+* HOWTO
+
+In order to use this, you need to initialise the json parser using:
+#+BEGIN_SRC C
+/* initialise the json parser with the contents of information */
+int jsonp_init(jsonp_info_t info);
+#+END_SRC
+
+You can create a jsonp_info_t structure using:
+#+BEGIN_SRC C
+/* initialises a jsonp_info_t structure with @type and @data */
+jsonp_info_t jsonp_create_json_info(JSONP_INFO_DATA_TYPE type,
+                                    const char *data);
+#+END_SRC
+
+Depending on whether you are using JSONP_TEXT or JSONP_FILE for `type`,
+JSONP_TEXT causes the json parser to allocate it's own copy of `data`,
+JSONP_FILE causes the json parser to open a file, treating `data` as a
+path to the file to be read, as a result, to close or free the data used
+by the parser you will need to make a call to:
+#+BEGIN_SRC C
+/* free the contents held in the json parser global state,
+   this will free the parser's copy of the buffer, and/or close
+   the open file it has */
+int jsonp_free(void);
+#+END_SRC
