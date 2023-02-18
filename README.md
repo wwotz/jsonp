@@ -1,5 +1,64 @@
-# jsonp - json parser written in C.
+# jsonp - json parser written in C. 
 
-Check out `examples.org` to see what the library can be used for 
+## EXAMPLES
 
-## TODO - port to stb-style single file header.
+#+BEGIN_SRC C 
+#define JSONP_IMPLEMENTATION
+#include "stb_jsonp.h"
+
+static int prettify()
+{
+        jsonp_token tok;
+        int tab_count = 0, ttab_count = tab_count;
+        while ((tok = jsonp_get_token()).type != JSONP_TYPE_EOF) {
+                switch (tok.type) {
+                case JSONP_TYPE_OPEN_BRACE:
+                        tab_count++;
+                case JSONP_TYPE_COMMA:
+                        printf("%s\n", tok.token.data);
+                        ttab_count = tab_count;
+                        while (ttab_count--) {
+                                printf("\t");
+                        }
+                        break;
+                case JSONP_TYPE_CLOSE_BRACE:
+                        tab_count--;
+                        ttab_count = tab_count;
+                        printf("\n");
+                        while (ttab_count--) {
+                                printf("\t");
+                        }
+                        printf("%s\n", tok.token.data);
+                        int ttab_count = tab_count;
+                        while (ttab_count--) {
+                                printf("\t");
+                        }
+                        break;
+                case JSONP_TYPE_COLON:
+                        printf(" : ");
+                        break;
+                case JSONP_TYPE_STRING:
+                        printf("\"%s\"", tok.token.data);
+                        break;
+                default:
+                        printf("%s", tok.token.data);
+                        break;
+                }
+        }
+        return 0;
+}
+
+int main(int argc, char **argv)
+{
+        if (jsonp_init(jsonp_create_json_info(JSONP_FILE,
+                                              "sample.json")) != JSONP_NO_ERROR) {
+                fprintf(stderr, "Failed!\n");
+                exit(EXIT_FAILURE);
+        }
+
+        prettify();
+
+        jsonp_free();
+        return 0;
+}
+#+END_SRC
