@@ -100,8 +100,8 @@ int jsonp_free(void);
 Once you have done the initialisation, you can now process tokens using the API:
 #+BEGIN_SRC C
 /* token operations */
-JSONP_EXTERN jsonp_token jsonp_peek_token();                       /* peeks the next token  */
-JSONP_EXTERN jsonp_token jsonp_get_token();                        /* gets the next token   */
-JSONP_EXTERN jsonp_token jsonp_unget_token(jsonp_token tok);       /* ungets the next token */
-JSONP_EXTERN int jsonp_rewind(void);                               /* goes to start of file or buffer the */
+jsonp_token jsonp_peek_token();                       /* peeks the next token  */
+jsonp_token jsonp_get_token();                        /* gets the next token   */
+jsonp_token jsonp_unget_token(jsonp_token tok);       /* ungets the next token */
+int jsonp_rewind(void);                               /* goes to start of file or buffer the */
 #+END_SRC
