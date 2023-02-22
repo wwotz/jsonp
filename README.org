@@ -126,3 +126,30 @@ typedef struct {
         JSONP_TYPE type; // the token type stored there.
 } jsonp_token;
 #+END_SRC
+
+The first field is a stretchy buffer that reallocates itself, and the second field refers to the
+type of the token that is currently stored, here are the token types:
+#+BEGIN_SRC C
+typedef enum {
+        JSONP_TYPE_EOF = 0,
+        JSONP_TYPE_EMPTY,
+        JSONP_TYPE_OPEN_BRACE,
+        JSONP_TYPE_CLOSE_BRACE,
+        JSONP_TYPE_OPEN_BRACKET,
+        JSONP_TYPE_CLOSE_BRACKET,
+        JSONP_TYPE_COMMA,
+        JSONP_TYPE_COLON,
+        JSONP_TYPE_NUMBER,
+        JSONP_TYPE_STRING,
+        JSONP_TYPE_UNDEFINED,
+        JSONP_TYPE_ERROR,
+        JSONP_TYPE_COUNT,
+} JSONP_TYPE;
+#+END_SRC
+
+You can query the necessary information from the jsonp_token structure using the following
+functions:
+#+BEGIN_SRC C
+JSONP_TYPE jsonp_get_type_token(jsonp_token tok); /* returns the token's JSONP_TYPE */
+const char *jsonp_get_data_token(jsonp_token tok); /* returns the data in the stretchy buffer */
+#+END_SRC
