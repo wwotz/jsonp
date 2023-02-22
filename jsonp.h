@@ -110,6 +110,10 @@ JSONP_EXTERN int jsonp_insert_buffer(buffer_t *buffer, const char *data, int off
 JSONP_EXTERN int jsonp_resize_buffer(buffer_t *buffer);
 JSONP_EXTERN int jsonp_free_buffer(buffer_t *buffer);
 
+/* operations on the jsonp_token structure */
+JSONP_EXTERN JSONP_TYPE jsonp_get_type_token(jsonp_token tok);
+JSONP_EXTERN const char *jsonp_get_data_token(jsonp_token tok);
+
 /* token operations */
 JSONP_EXTERN jsonp_token jsonp_peek_token();
 JSONP_EXTERN jsonp_token jsonp_get_token();
@@ -625,6 +629,16 @@ JSONP_EXTERN int jsonp_free_buffer(buffer_t *buffer)
                 buffer->capacity = 0;
         }
         return JSONP_NO_BUFFER_ERROR;
+}
+
+JSONP_EXTERN JSONP_TYPE jsonp_get_type_token(jsonp_token tok)
+{
+        return tok.type;
+}
+
+JSONP_EXTERN const char *jsonp_get_data_token(jsonp_token tok)
+{
+        return tok.token.data;
 }
 
 JSONP_EXTERN jsonp_token jsonp_peek_token()

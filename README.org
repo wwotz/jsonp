@@ -1,4 +1,8 @@
-# jsonp - json parser written in C. 
+# jsonp - json parser written in C.
+
+* What is it?
+jsonp is a lexer in C, that performs lexical analysis on data on primary and secondary storage; depending on the data that has been provided to it,
+as well as providing functions that allow you to then parse the json effortlessly, there are examples below of how it can be used to parse your data:
 
 * EXAMPLES
 
@@ -8,16 +12,22 @@
 #define JSONP_IMPLEMENTATION
 #include "stb_jsonp.h"
 
-static int prettify()
+static int prettify(const char *file_path, const char *output_file)
 {
+        if (jsonp_init(jsonp_create_json_info(JSONP_TEXT, file_path)) != JSONP_NO_ERROR) {
+                fprintf(stderr, "Invalid file name!\n");
+                return -1;
+        }
+
         jsonp_token tok;
         int tab_count = 0, ttab_count = tab_count;
-        while ((tok = jsonp_get_token()).type != JSONP_TYPE_EOF) {
-                switch (tok.type) {
+        while (jsonp_get_type_token(tok = jsonp_get_token()) != JSONP_TYPE_EOF) {
+                JSONP_TYPE type = jsonp_get_type_token(tok);
+                switch (type) {
                 case JSONP_TYPE_OPEN_BRACE:
                         tab_count++;
                 case JSONP_TYPE_COMMA:
-                        printf("%s\n", tok.token.data);
+                        printf("%s\n", jsonp_get_data_token(tok));
                         ttab_count = tab_count;
                         while (ttab_count--) {
                                 printf("\t");
@@ -30,8 +40,8 @@ static int prettify()
                         while (ttab_count--) {
                                 printf("\t");
                         }
-                        printf("%s\n", tok.token.data);
-                        int ttab_count = tab_count;
+                        printf("%s\n", jsonp_get_data_token(tok));
+                        ttab_count = tab_count;
                         while (ttab_count--) {
                                 printf("\t");
                         }
@@ -40,13 +50,15 @@ static int prettify()
                         printf(" : ");
                         break;
                 case JSONP_TYPE_STRING:
-                        printf("\"%s\"", tok.token.data);
+                        printf("\"%s\"", jsonp_get_data_token(tok));
                         break;
                 default:
-                        printf("%s", tok.token.data);
+                        printf("%s", jsonp_get_data_token(tok));
                         break;
                 }
         }
+
+        jsonp_free();
         return 0;
 }
 
@@ -104,4 +116,13 @@ jsonp_token jsonp_peek_token();                       /* peeks the next token  *
 jsonp_token jsonp_get_token();                        /* gets the next token   */
 jsonp_token jsonp_unget_token(jsonp_token tok);       /* ungets the next token */
 int jsonp_rewind(void);                               /* goes to start of file or buffer the */
+#+END_SRC
+
+The first three functions return the following structure:
+#+BEGIN_SRC C
+/* structure storing token information */
+typedef struct {
+        buffer_t token; // stretchy buffer
+        JSONP_TYPE type; // the token type stored there.
+} jsonp_token;
 #+END_SRC
