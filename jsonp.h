@@ -16,9 +16,13 @@
 #include <string.h>
 #include <stdio.h>
 
-#define JSONP_BUFFER_CAPACITY 256
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* stretchy buffer */
+#define JSONP_BUFFER_CAPACITY 256
+
 typedef struct {
         char *data;
         int size;
@@ -86,7 +90,7 @@ typedef enum {
 /* create a jsonp info structure */
 JSONP_EXTERN jsonp_info_t jsonp_create_json_info(JSONP_INFO_DATA_TYPE type,
                                                  const char *data);
-/* initialise the json parser using the information stored in
+/* initialise the json parpser using the information stored in
    the jsonp_info_t structure */
 JSONP_EXTERN int jsonp_init(jsonp_info_t info);
 
@@ -115,6 +119,11 @@ JSONP_EXTERN int jsonp_rewind(void);
 /* error code operations */
 JSONP_EXTERN int jsonp_had_error(void);
 JSONP_EXTERN const char *jsonp_get_error(void);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef JSONP_IMPLEMENTATION
 
@@ -235,6 +244,8 @@ JSONP_STATIC const char *jsonp_pop_error_debug(void)
                         jsonp_debug_stack_ptr += JSONP_DEBUG_STACK_CAPACITY;
                 return jsonp_debug_stack[jsonp_debug_stack_ptr];
         }
+
+        return "No Error";
 }
 
 JSONP_STATIC int jsonp_stack_full_debug(void)
@@ -457,7 +468,14 @@ JSONP_EXTERN int jsonp_init(jsonp_info_t info)
 
 JSONP_EXTERN int jsonp_free(void)
 {
+        if (curr_fd) {
+                fclose(curr_fd);
+                curr_fd = NULL;
+        }
 
+        jsonp_free_buffer(&curr_buffer);
+
+        return JSONP_NO_ERROR;
 }
 
 JSONP_STATIC const char *jsonp_get_error_buffer(int status)
@@ -481,7 +499,7 @@ JSONP_EXTERN int jsonp_init_buffer(buffer_t *buffer)
         }
 
         if (buffer->data == NULL)
-                buffer->data = malloc(sizeof(*buffer->data)
+                buffer->data = (typeof(buffer->data))malloc(sizeof(*buffer->data)
                                       * (JSONP_BUFFER_CAPACITY + 1));
 
         if (buffer->data == NULL) {
@@ -583,7 +601,7 @@ JSONP_EXTERN int jsonp_resize_buffer(buffer_t *buffer)
                 return JSONP_DATA_BUFFER_ERROR;
         }
 
-        char *new_data = realloc(buffer->data, (buffer->capacity*2) + 1);
+        char *new_data = (typeof(new_data))realloc(buffer->data, (buffer->capacity*2) + 1);
         if (new_data == NULL) {
                 jsonp_push_error_debug(jsonp_get_error_buffer(JSONP_RESIZE_BUFFER_ERROR));
                 return JSONP_RESIZE_BUFFER_ERROR;
